@@ -94,6 +94,16 @@ watches it and reloads a lesson when you save it in your editor.
 - Time to review: learned pieces come back after 1, 3, 7, 14, 30 and 60
   days.
 
+### Your piano's own panel
+- Piano → Piano controls, beside the app: change the piano's tone, volume,
+  ambience, brilliance, key touch, split and dual, transpose, tuning and
+  its metronome, and see changes made on the piano's own buttons.
+- On Roland pianos that use Roland's app protocol (mapped on the FP-10 and
+  FP-30 by others; other models are tried and may work). Any other
+  keyboard gets standard MIDI: tone by bank and program, volume, reverb.
+- "What the piano sends" logs every message that isn't a note, so a model
+  nobody has mapped can be learned from its buttons.
+
 ### Seeing it
 - The score (abcjs for ABC, OpenSheetMusicDisplay for MusicXML) follows
   along and marks each note hit, late or missed.

@@ -9,6 +9,8 @@
   function create({ onNote, onDevices, onPedal, touch }) {
     let access = null, output = null, outputId = null;
     let status = "off"; // off | asking | on | denied | unsupported
+    let sysex = false;
+    const listeners = new Set();
     const sounding = new Set();
     const T = window.Piano.touch;
     const keys = T.filter(touch || (() => ({})));
@@ -47,6 +49,32 @@
         if (vel != null) onNote(d1, on, vel, at, "midi");
       }
       else if (hi === 0xb0 && d1 === 64 && onPedal) onPedal(d2 >= 64);
+      if (!on && !off && listeners.size) for (const fn of listeners) fn(e.data, e.target ? T.deviceName(e.target.name) : "");
+    }
+
+    // Everything that isn't a note, for the piano's panel (instrument.js).
+    function listen(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+
+    // SysEx is asked for only when the piano's panel is opened, not at the
+    // start: least access. A browser that says no keeps plain MIDI.
+    async function allowSysex() {
+      if (sysex) return true;
+      if (!navigator.requestMIDIAccess) return false;
+      try {
+        const a = await navigator.requestMIDIAccess({ sysex: true });
+        if (access) for (const input of access.inputs.values()) input.onmidimessage = null;
+        access = a; sysex = true; status = "on";
+        access.onstatechange = () => wire();
+        wire();
+        return true;
+      } catch (e) { return false; }
+    }
+
+    // Raw bytes to one port, whichever the notes go to.
+    function sendTo(id, bytes) {
+      const port = access && id ? access.outputs.get(id) : null;
+      if (!port) return false;
+      try { port.send(bytes); return true; } catch (e) { return false; }
     }
 
     async function start() {
@@ -112,7 +140,7 @@
     // any key.
     function inputDelay() { return lag.count ? { average: lag.average(), worst: lag.worst(), count: lag.count } : null; }
 
-    return { start, devices, setOutput, send, allOff, light, inputDelay, resetKeys: () => keys.reset(), get hasOutput() { return !!output; }, get status() { return status; } };
+    return { start, devices, setOutput, send, allOff, light, inputDelay, listen, allowSysex, sendTo, get sysex() { return sysex; }, resetKeys: () => keys.reset(), get hasOutput() { return !!output; }, get status() { return status; } };
   }
 
   // The typing keyboard as a piano. Returns a function that turns it off.

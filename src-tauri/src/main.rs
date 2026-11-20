@@ -29,7 +29,9 @@ fn main() {
         // Picking another folder for the data.
         .plugin(tauri_plugin_dialog::init())
         // Web MIDI asks for permission; reaching the piano is the app's whole
-        // job, so it's granted. Every other request gets the WebView's own answer.
+        // job, so it's granted. On Windows this kind is WebView2's SysEx
+        // permission, which Piano controls needs to change the piano's own
+        // settings (instrument.js). Every other request gets the WebView's own answer.
         .on_permission_request(|_, kind| match kind {
             PermissionKind::Midi => PermissionResponse::Allow,
             _ => PermissionResponse::Default,

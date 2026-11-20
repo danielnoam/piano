@@ -36,7 +36,8 @@ src/lesson.js        front matter, block options, links: everything about lesson
 src/engine.js        the practice engine: wait/flow/recital/watch, hands, loops, metronome, results
 src/recital.js       recital scoring: points, combo, stars (pure, fed the engine's events)
 src/touch.js         what comes from the piano first: touch curve, light-touch floor, double notes, port names, key delay (pure)
-src/midi.js          Web MIDI in and out, lit keys, and the computer keyboard as a piano
+src/midi.js          Web MIDI in and out, lit keys, and the computer keyboard as a piano; SysEx on request
+src/instrument.js    the piano's own panel: Roland's app protocol (RQ1/DT1 to model 00 00 00 28), standard MIDI, the learn log
 src/synth.js         the app's piano: Salamander samples (made sound until they load), pedal, room
 src/sounds/piano/    30 Salamander Grand Piano MP3s (CC-BY 3.0, LICENSE.md), one every 3 semitones
 src/score.js         score adapters: abcjs, OSMD, none; each returns a song
@@ -84,6 +85,19 @@ here: fix them in keel, release it, then `node tools/keel-sync.js v<x.y.z>`.
 - **MIDI is granted without asking** in the Windows app
   (`main.rs`, `on_permission_request`). The window only ever loads the
   app's own files.
+- **SysEx is asked for when Piano controls opens**, not at the start
+  (`midi.allowSysex`). In the Windows app the existing MIDI grant already
+  covers it: wry's `PermissionKind::Midi` is WebView2's
+  `MIDI_SYSTEM_EXCLUSIVE_MESSAGES` permission. With SysEx a page could
+  also send a piano messages that change or reset its settings; the
+  window only loads the app's own files.
+- **Roland's app protocol is unpublished.** The address map is what
+  others saw Roland's app send an FP-10 and FP-30 (fp30remote, GPL-3;
+  roland-piano, MIT): facts only, our own code. Connecting turns the
+  piano's remote mode on (01000306) and its change reports on (01000300),
+  as Roland's app does; leaving the app turns both off (`pagehide`). A
+  crash leaves them on until the piano is switched off, which only means
+  it sends a few extra SysEx messages.
 - **Folders are read and written through File System Access.** The app
   keeps the folder handles in IndexedDB; Windows asks again after a
   restart when the permission lapsed.
@@ -175,6 +189,13 @@ here: fix them in keel, release it, then `node tools/keel-sync.js v<x.y.z>`.
   DynamicsCompressor delays everything through it about 6 ms.
 - The hand split and the skipped bars happen in `midifile.parse`, so a
   setting changed while a file is open applies from the next one opened.
+- Piano controls redraw only when the panel's shape changes (found the
+  piano, another keyboard mode); a value the piano reports moves its
+  control in place, and never the slider that has focus, or a drag would
+  jump back while the piano's echo is on its way.
+- The piano's messages are matched to its out port by name
+  (`touch.deviceName`), since Web MIDI gives inputs and outputs different
+  ids.
 - abcjs note timings are matched to notes by `startChar`, not by order.
 - Wait mode credits the next required note even when pressed early and
   jumps the song to it; flow mode only within 250 ms.
