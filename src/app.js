@@ -455,6 +455,20 @@
       pg.appendChild(el("p", "dim", t("Finding and downloading music works in the Windows app.")));
       return [head, body];
     }
+    const source = select([["mutopia", t("Mutopia Project")], ["pdmx", t("PDMX collection")]], findSource(), (v) => { settings.set("findSource", v); renderLibrary(); });
+    source.setAttribute("aria-label", t("Source"));
+    const folders = courses.filter((c) => c.kind === "folder" && library.writable(c.id));
+    const to = settings.get("findFolder");
+    const target = folders.find((c) => c.id === to) || folders[0] || null;
+    const where = folders.length > 1 ? select(folders.map((c) => [c.id, c.title]), target.id, (v) => { settings.set("findFolder", v); renderLibrary(); }) : null;
+    if (where) where.setAttribute("aria-label", t("Save to"));
+    const saveTo = where ? [el("span", "sep"), el("span", "note", t("Save to")), where] : [];
+    if (!target) {
+      const row = el("div", "row");
+      row.appendChild(button(t("Add a folder"), "btn primary", async () => { try { const id = await library.addFolder(); if (id) { settings.set("findFolder", id); await renderLibrary(); } } catch (e) { if (e && e.name !== "AbortError") toast(e.message); } }));
+      pg.append(el("p", null, t("Downloads go into one of your folders, beside your own lessons. Add one first.")), row);
+    }
+    if (findSource() === "pdmx") return pdmxView(head, source, saveTo, target, pg, scroll, body);
     const box = document.createElement("input");
     box.type = "search"; box.className = "find-box"; box.value = find.q;
     box.placeholder = t("Title or keyword"); box.setAttribute("aria-label", t("Search for"));
@@ -462,19 +476,9 @@
     const who = select([["", t("Any composer")], ...(find.composers || [])], find.composer, (v) => { find.composer = v; find.q = box.value; findSearch(0); });
     who.setAttribute("aria-label", t("Composer"));
     if (!find.composers) loadComposers();
-    const folders = courses.filter((c) => c.kind === "folder" && library.writable(c.id));
-    const to = settings.get("findFolder");
-    const target = folders.find((c) => c.id === to) || folders[0] || null;
-    const where = folders.length > 1 ? select(folders.map((c) => [c.id, c.title]), target.id, (v) => { settings.set("findFolder", v); renderLibrary(); }) : null;
-    if (where) where.setAttribute("aria-label", t("Save to"));
-    const bar = commands(box, who, cmd(t("Search"), "search", () => { find.q = box.value; findSearch(0); }, true),
-      where ? el("span", "sep") : null, where ? el("span", "note", t("Save to")) : null, where,
+    const bar = commands(source, el("span", "sep"), box, who, cmd(t("Search"), "search", () => { find.q = box.value; findSearch(0); }, true),
+      ...saveTo,
       el("span", "spacer"), cmd(t("Search IMSLP"), null, () => K.platform.openOutside("https://imslp.org/index.php?title=Special:Search&search=" + encodeURIComponent((box.value || "") + " piano"))));
-    if (!target) {
-      const row = el("div", "row");
-      row.appendChild(button(t("Add a folder"), "btn primary", async () => { try { const id = await library.addFolder(); if (id) { settings.set("findFolder", id); await renderLibrary(); } } catch (e) { if (e && e.name !== "AbortError") toast(e.message); } }));
-      pg.append(el("p", null, t("Downloads go into one of your folders, beside your own lessons. Add one first.")), row);
-    }
     if (find.busy) pg.appendChild(el("p", "dim", t("Searching the Mutopia Project…")));
     else if (find.error) pg.appendChild(el("p", "find-error", find.error));
     if (find.pieces) {
@@ -546,6 +550,113 @@
       toast(t("Couldn't download it: {why}", { why: String(e && e.message || e) }));
     }
     find.saving.delete(p.mid);
+    if (libView === "find") renderLibrary();
+  }
+
+  // The PDMX collection: got once into the data folder (pdmx.rs), then
+  // searched here with no connection (pdmx.js).
+  const findSource = () => settings.get("findSource") || "mutopia";
+  const pd = { pieces: undefined, made: 0, unrated: false, progress: null, q: "", level: "", shown: 100, saving: new Set(), listening: false };
+  async function pdmxLoad() {
+    try {
+      const text = await invoke("pdmx_index");
+      const data = text ? JSON.parse(text) : null;
+      pd.pieces = data ? data.pieces : null; pd.made = data ? data.made : 0;
+    } catch (e) { pd.pieces = null; }
+    try { pd.progress = (await invoke("pdmx_status")) || null; } catch (e) { pd.progress = null; }
+    if (!pd.listening && window.__TAURI__.event) {
+      pd.listening = true;
+      await window.__TAURI__.event.listen("pdmx", ({ payload: p }) => {
+        const was = pd.progress && pd.progress.phase;
+        pd.progress = ["index", "scores"].includes(p.phase) ? p : null;
+        if (p.phase === "done") { toast(t("The PDMX collection is ready: {n} pieces.", { n: p.found.toLocaleString() })); pd.pieces = undefined; }
+        else if (p.phase === "error") toast(t("Couldn't get the PDMX collection: {why}", { why: p.message }));
+        if (libView === "find" && findSource() === "pdmx" && (p.phase !== was || !document.querySelector(".pdmx-bar"))) renderLibrary();
+        else pdmxBar();
+      });
+    }
+    if (libView === "find") renderLibrary();
+  }
+  // Moves the bar without drawing the whole page again.
+  function pdmxBar() {
+    const bar = document.querySelector(".pdmx-bar"), p = pd.progress;
+    if (!bar || !p) return;
+    const meter = bar.querySelector("progress"), note = bar.querySelector(".note");
+    if (p.total) { meter.max = p.total; meter.value = p.done; } else meter.removeAttribute("value");
+    const mb = (n) => Math.round(n / 1048576).toLocaleString();
+    note.textContent = p.phase === "index"
+      ? t("Reading the index: {done} of {total} MB", { done: mb(p.done), total: p.total ? mb(p.total) : "?" })
+      : t("Keeping {n} piano pieces: {done} of {total} MB", { n: p.pieces.toLocaleString(), done: mb(p.done), total: p.total ? mb(p.total) : "?" });
+  }
+  const rowOf = (...kids) => { const r = el("div", "row"); r.append(...kids); return r; };
+  function pdmxView(head, source, saveTo, target, pg, scroll, body) {
+    if (pd.pieces === undefined) { pdmxLoad(); pg.appendChild(el("p", "dim", t("Loading…"))); return [head, commands(source), body]; }
+    if (pd.progress) {
+      const bar = el("div", "pdmx-bar");
+      bar.append(document.createElement("progress"), el("span", "note"));
+      pg.append(el("p", null, t("Getting the PDMX collection. You can keep practising; it carries on in the background.")), bar,
+        rowOf(button(t("Cancel"), "btn", () => invoke("pdmx_cancel"))));
+      requestAnimationFrame(pdmxBar);
+      return [head, commands(source), body];
+    }
+    if (!pd.pieces) {
+      const box = document.createElement("label"); box.className = "check";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = pd.unrated;
+      cb.addEventListener("change", () => { pd.unrated = cb.checked; });
+      box.append(cb, el("span", null, t("Also keep unrated pieces (about ten times as many, mostly single-line tunes)")));
+      pg.append(
+        el("p", null, t("PDMX is about 250,000 scores shared on MuseScore and marked public domain by their uploaders, collected by researchers at UC San Diego (CC BY 4.0).")),
+        el("p", null, t("Getting it downloads about 2.1 GB from Zenodo and keeps only the solo piano pieces that other people have rated: about 3,800 pieces, around 30 MB. Nothing else is kept.")),
+        el("p", "dim", t("Uploaders' licence marks aren't checked by anyone. Film, game and pop arrangements are for your own practice, not to share.")),
+        box,
+        rowOf(button(t("Get the collection"), "btn primary", async () => {
+          try { await invoke("pdmx_get", { unrated: pd.unrated }); pd.progress = { phase: "index", done: 0, total: 0, pieces: 0 }; renderLibrary(); }
+          catch (e) { toast(t("Couldn't get the PDMX collection: {why}", { why: String(e && e.message || e) })); }
+        })));
+      return [head, commands(source), body];
+    }
+    const box = document.createElement("input");
+    box.type = "search"; box.className = "find-box"; box.value = pd.q;
+    box.placeholder = t("Title, composer or genre"); box.setAttribute("aria-label", t("Search for"));
+    let timer = 0;
+    box.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { pd.q = box.value; pd.shown = 100; renderLibrary(); requestAnimationFrame(() => { const b = document.querySelector(".find-box"); if (b) { b.focus(); b.setSelectionRange(b.value.length, b.value.length); } }); }, 250); });
+    const lvl = select([["", t("Any level")], ...P.pdmx.LEVELS.map((l, i) => [String(i), t(l)])], pd.level, (v) => { pd.level = v; pd.shown = 100; renderLibrary(); });
+    lvl.setAttribute("aria-label", t("Level"));
+    const bar = commands(source, el("span", "sep"), box, lvl, ...saveTo, el("span", "spacer"),
+      cmd(t("Get it again"), null, () => { pd.pieces = null; renderLibrary(); }),
+      cmd(t("Remove the collection"), null, async () => { try { await invoke("pdmx_remove"); pd.pieces = null; renderLibrary(); } catch (e) { toast(String(e && e.message || e)); } }));
+    const found = P.pdmx.search(pd.pieces, { q: pd.q, level: pd.level });
+    const have = new Set(target ? (courses.find((c) => c.id === target.id) || { lessons: [] }).lessons : []);
+    const rows = found.slice(0, pd.shown).map((p) => {
+      const n = P.pdmx.names(p);
+      const got = have.has(n.lesson);
+      const act = got ? button(t("Open"), "btn", () => openLesson(target.id, n.lesson))
+        : button(pd.saving.has(p.file) ? t("Saving…") : t("Add to library"), "btn", () => pdmxSave(p, target));
+      act.disabled = !target || pd.saving.has(p.file);
+      return { course: "pdmx", path: p.file, open: () => (got ? openLesson(target.id, n.lesson) : target && pdmxSave(p, target)),
+        cells: [p.title, p.composer, t(P.pdmx.LEVELS[p.level] || ""), p.rating.toFixed(1), act] };
+    });
+    if (!rows.length) rows.push({ note: t("Nothing found. Try fewer words.") });
+    const table = fileTable([t("Name"), t("Composer"), t("Level"), t("Rating"), ""], rows, () => {});
+    table.classList.add("find-table");
+    pg.appendChild(el("p", "dim", t("{n} of {total} pieces", { n: found.length.toLocaleString(), total: pd.pieces.length.toLocaleString() })));
+    const nav = el("div", "row find-pages");
+    if (found.length > pd.shown) nav.appendChild(button(t("Show more"), "btn", () => { pd.shown += 100; renderLibrary(); }));
+    scroll.append(table, nav);
+    return [head, bar, body];
+  }
+  async function pdmxSave(p, target) {
+    if (!target || pd.saving.has(p.file)) return;
+    pd.saving.add(p.file); renderLibrary();
+    const n = P.pdmx.names(p);
+    try {
+      await library.write(target.id, n.mxl, new Uint8Array(await invoke("pdmx_file", { name: p.file })));
+      await library.write(target.id, n.lesson, P.pdmx.lesson(p));
+      toast(t("Saved {name} in {folder}", { name: p.title, folder: target.title }));
+    } catch (e) {
+      toast(t("Couldn't save it: {why}", { why: String(e && e.message || e) }));
+    }
+    pd.saving.delete(p.file);
     if (libView === "find") renderLibrary();
   }
 
@@ -1302,6 +1413,7 @@
     const credits = [
       ["abcjs", t("draws ABC music")], ["OpenSheetMusicDisplay", t("draws MusicXML")], ["markdown-it", t("reads lessons")],
       ["pdf.js", t("shows PDF books")], ["Salamander Grand Piano", t("the piano sound, by Alexander Holm, CC-BY 3.0")], ["Lucide", t("icons")], ["Mutopia Project", t("free sheet music in Find music, each piece under its own licence")],
+      ["PDMX", t("the PDMX collection in Find music, by Phillip Long and others at UC San Diego, CC BY 4.0")],
     ];
     const list = el("div", "set-card");
     for (const [name, what] of credits) { const r = el("div", "set-row"); r.append(el("strong", null, name), el("span", "dim", what)); list.appendChild(r); }

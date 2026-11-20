@@ -80,6 +80,9 @@ watches it and reloads a lesson when you save it in your editor.
 - Find music: search the Mutopia Project's free piano music by title or
   composer and download a piece into one of your folders: its MIDI file,
   its sheet music as a PDF beside it, and its licence (Windows app).
+  Or get the PDMX collection once (a 2.1 GB download that keeps about
+  3,800 rated piano scores from MuseScore, film and game music included)
+  and search it with no connection.
 - Recital: play the whole piece without stopping for points, a combo for
   notes in a row and up to five stars; the best stars show in the library.
 - Watch and listen: the app plays the piece while you follow it.

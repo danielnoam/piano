@@ -7,6 +7,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod catalog;
+mod pdmx;
 mod portable;
 
 use tauri::webview::{PermissionKind, PermissionResponse};
@@ -36,13 +37,20 @@ fn main() {
             _ => PermissionResponse::Default,
         })
         .manage(location)
+        .manage(std::sync::Arc::new(pdmx::Job::default()))
         .invoke_handler(tauri::generate_handler![
             portable::data_location,
             portable::set_data_location,
             portable::update_check,
             portable::update_install,
             catalog::catalog_page,
-            catalog::catalog_file
+            catalog::catalog_file,
+            pdmx::pdmx_get,
+            pdmx::pdmx_cancel,
+            pdmx::pdmx_status,
+            pdmx::pdmx_index,
+            pdmx::pdmx_file,
+            pdmx::pdmx_remove
         ])
         // The window is made here, not in tauri.conf.json, to give it the
         // data folder.

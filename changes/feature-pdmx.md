@@ -1,0 +1,2 @@
+### Added
+- Find music can also search the PDMX collection: about 3,800 rated solo piano scores shared on MuseScore, classical, folk, film and game music alike. Get it once from Find music (it downloads about 2.1 GB from Zenodo and keeps around 30 MB), then search by title, composer or genre and by level with no connection, and add a piece to one of your folders as a MusicXML lesson. Windows app only.

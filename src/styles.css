@@ -591,3 +591,5 @@ input.switch { width: 15px; height: 15px; margin: 0; accent-color: var(--accent)
 .find-head { margin: 0; font-size: 13px; color: var(--text-dim); font-weight: 500; }
 table.files.find-table td:last-child { width: 112px; max-width: none; overflow: visible; padding-block: 2px; }
 .find-pages { padding: var(--space-3) var(--space-5); }
+.pdmx-bar { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-3) 0; }
+.pdmx-bar progress { flex: 0 1 360px; height: 8px; accent-color: var(--accent); }

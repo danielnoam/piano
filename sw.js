@@ -20,6 +20,7 @@ const ASSETS = [
   "./src/lesson.js",
   "./src/library.js",
   "./src/catalog.js",
+  "./src/pdmx.js",
   "./src/touch.js",
   "./src/midi.js",
   "./src/hands.js",

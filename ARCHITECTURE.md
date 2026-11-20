@@ -45,9 +45,11 @@ src/timeline.js      the bars strip: seek, drag a loop
 src/layout.js        the panel split tree: normalise, place, resize, render
 src-tauri/src/portable.rs  where the data lives (beside the exe by default) and the in-place updater
 src-tauri/src/catalog.rs   fetches Mutopia's pages and files for Find music: that host only
+src-tauri/src/pdmx.rs      gets the PDMX collection: streams Zenodo's index and score archive, keeps the solo piano pieces in <data>\PDMX
 src/menus.js         the menu bar: menus built on open, Alt+letter, arrows, Esc
 src/library.js       courses: built-in, folders (File System Access), single files
 src/catalog.js       Find music: Mutopia's search URL, its result pages read into pieces, the lesson saved with a download (pure)
+src/pdmx.js          Find music: searching the PDMX collection's index, the lesson saved with a piece (pure)
 src/practice.js      one practice session: engine + score + roll + sound; transpose, auto speed-up, free play
 src/progress.js      time per day, runs, best tempo and weak bars (pure, over a store)
 src/hotkeys.js       rebindable shortcuts, computer keys and piano keys (pure)
@@ -106,6 +108,17 @@ here: fix them in keel, release it, then `node tools/keel-sync.js v<x.y.z>`.
   What you search for is sent to Mutopia. Downloads keep each piece's
   licence and source in the lesson saved beside them; the app ships none
   of their files.
+- **The PDMX collection is each person's own download.** PDMX (CC BY 4.0)
+  is only offered as archives, so `pdmx.rs` downloads its 225 MB index
+  and 1.9 GB MusicXML archive from `zenodo.org` (fixed URLs, https-only
+  redirects) and reads both as they arrive, keeping only rated solo piano
+  pieces (General MIDI 0-3, one or two parts, deduplicated, no licence
+  conflict): about 3,800 scores, 30 MB, in `<data>\PDMX`. Nothing is
+  hosted by us. The licences are MuseScore uploaders' own marks, and
+  film, game and pop arrangements among them are still under copyright:
+  fine to practise, not to share, and the app says so before the
+  download. Member names are reduced to a plain `*.mxl` file name before
+  anything is written, and a member over 8 MB is skipped.
 - **English only.** keel's i18n is loaded but there is no second language.
 - **Progress lives in this computer's storage** (localStorage
   `piano.progress`), not in the lesson folders: built-in lessons have no
