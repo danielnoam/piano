@@ -19,6 +19,7 @@ const ASSETS = [
   "./src/layout.js",
   "./src/lesson.js",
   "./src/library.js",
+  "./src/catalog.js",
   "./src/touch.js",
   "./src/midi.js",
   "./src/hands.js",

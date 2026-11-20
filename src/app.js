@@ -146,7 +146,7 @@
   // pieces as a table with a details pane for the selected one.
   let libView = "all", libSel = null;
   const titles = {};
-  const LIB_VIEWS = [["all", "book", "Library"], ["review", "repeat", "Due for review"], ["today", "target", "Today's practice"], ["drills", "music", "Drills"], ["progress", "chart", "Progress"]];
+  const LIB_VIEWS = [["all", "book", "Library"], ["review", "repeat", "Due for review"], ["today", "target", "Today's practice"], ["drills", "music", "Drills"], ["progress", "chart", "Progress"], ["find", "search", "Find music"]];
 
   async function renderLibrary() {
     courses = await library.list();
@@ -167,7 +167,7 @@
     nav.append(free, el("span", "grow"), set);
 
     const main = el("div", "lib-main");
-    const view = { all: libraryView, review: reviewView, today: todayView, drills: drillsView, progress: progressView }[libView] || libraryView;
+    const view = { all: libraryView, review: reviewView, today: todayView, drills: drillsView, progress: progressView, find: findView }[libView] || libraryView;
     main.append(...view(due));
     $("library").replaceChildren(nav, main);
     renderToday();
@@ -441,6 +441,114 @@
     scroll.appendChild(pg); body.appendChild(scroll);
     return [libHead(t("Drills"), t("Library")), commands(cmd(t("Start drills"), "play", () => openDrills(), true)), body];
   }
+  // Free music from the Mutopia Project, searched and saved into one of
+  // your folders as a MIDI file, its PDF and a lesson that ties them
+  // together (catalog.js; the desktop app fetches, catalog.rs).
+  const find = { q: "", composer: "", start: 0, pieces: null, next: null, busy: false, error: "", composers: null, saving: new Set() };
+  function findView() {
+    const body = el("div", "lib-body single");
+    const scroll = el("div", "lib-scroll");
+    const pg = el("div", "lib-page find");
+    scroll.appendChild(pg); body.appendChild(scroll);
+    const head = libHead(t("Find music"), t("Library"));
+    if (!K.platform.desktop) {
+      pg.appendChild(el("p", "dim", t("Finding and downloading music works in the Windows app.")));
+      return [head, body];
+    }
+    const box = document.createElement("input");
+    box.type = "search"; box.className = "find-box"; box.value = find.q;
+    box.placeholder = t("Title or keyword"); box.setAttribute("aria-label", t("Search for"));
+    box.addEventListener("keydown", (e) => { if (e.key === "Enter") { find.q = box.value; findSearch(0); } });
+    const who = select([["", t("Any composer")], ...(find.composers || [])], find.composer, (v) => { find.composer = v; find.q = box.value; findSearch(0); });
+    who.setAttribute("aria-label", t("Composer"));
+    if (!find.composers) loadComposers();
+    const folders = courses.filter((c) => c.kind === "folder" && library.writable(c.id));
+    const to = settings.get("findFolder");
+    const target = folders.find((c) => c.id === to) || folders[0] || null;
+    const where = folders.length > 1 ? select(folders.map((c) => [c.id, c.title]), target.id, (v) => { settings.set("findFolder", v); renderLibrary(); }) : null;
+    if (where) where.setAttribute("aria-label", t("Save to"));
+    const bar = commands(box, who, cmd(t("Search"), "search", () => { find.q = box.value; findSearch(0); }, true),
+      where ? el("span", "sep") : null, where ? el("span", "note", t("Save to")) : null, where,
+      el("span", "spacer"), cmd(t("Search IMSLP"), null, () => K.platform.openOutside("https://imslp.org/index.php?title=Special:Search&search=" + encodeURIComponent((box.value || "") + " piano"))));
+    if (!target) {
+      const row = el("div", "row");
+      row.appendChild(button(t("Add a folder"), "btn primary", async () => { try { const id = await library.addFolder(); if (id) { settings.set("findFolder", id); await renderLibrary(); } } catch (e) { if (e && e.name !== "AbortError") toast(e.message); } }));
+      pg.append(el("p", null, t("Downloads go into one of your folders, beside your own lessons. Add one first.")), row);
+    }
+    if (find.busy) pg.appendChild(el("p", "dim", t("Searching the Mutopia Project…")));
+    else if (find.error) pg.appendChild(el("p", "find-error", find.error));
+    if (find.pieces) {
+      const have = new Set(target ? (courses.find((c) => c.id === target.id) || { lessons: [] }).lessons : []);
+      const rows = find.pieces.map((p) => {
+        const n = P.catalog.names(p);
+        const got = have.has(n.lesson);
+        const act = got ? button(t("Open"), "btn", () => openLesson(target.id, n.lesson))
+          : button(find.saving.has(p.mid) ? t("Saving…") : t("Download"), "btn", () => findSave(p, target));
+        act.disabled = !target || find.saving.has(p.mid);
+        return { course: "find", path: p.mid, open: () => (got ? openLesson(target.id, n.lesson) : target && findSave(p, target)),
+          cells: [p.title, p.composer.replace(/\s*\(.*\)$/, ""), p.style, Object.assign(el("span", null, p.licence), { title: p.licence }), act] };
+      });
+      if (!rows.length) rows.push({ note: t("Nothing found. Try fewer words, or another composer.") });
+      const table = fileTable([t("Name"), t("Composer"), t("Style"), t("Licence"), ""], rows, () => {});
+      table.classList.add("find-table");
+      const nav = el("div", "row find-pages");
+      if (find.start > 0) nav.appendChild(button(t("Previous"), "btn", () => findSearch(Math.max(0, find.start - 10))));
+      if (find.next != null) nav.appendChild(button(t("Next 10"), "btn", () => findSearch(find.next)));
+      scroll.append(table, nav);
+    } else if (!find.busy) {
+      pg.appendChild(el("p", "dim", t("Free piano music from the Mutopia Project: public domain or Creative Commons, each with its licence. A download is a MIDI file to practise with falling notes and its sheet music as a PDF beside it.")));
+      pg.appendChild(el("h3", "find-head", t("Good places to start")));
+      const list = el("section", "course");
+      const ul = el("ul", "items");
+      for (const s of P.catalog.SUGGESTED) {
+        const li = document.createElement("li");
+        const b = button("", null, async () => {
+          if (!find.composers) await loadComposers();
+          find.q = s.q; find.composer = P.catalog.composerFor(find.composers || [], s.who);
+          findSearch(0);
+        });
+        b.append(icon("music", 14), el("span", null, s.label));
+        li.appendChild(b); ul.appendChild(li);
+      }
+      list.appendChild(ul); pg.appendChild(list);
+    }
+    return [head, bar, body];
+  }
+  async function loadComposers() {
+    try {
+      find.composers = P.catalog.composers(await invoke("catalog_page", { url: P.catalog.SITE + "advsearch.html" }));
+      if (libView === "find") renderLibrary();
+    } catch (e) { find.composers = []; }
+  }
+  async function findSearch(start) {
+    find.busy = true; find.error = ""; find.start = start;
+    renderLibrary();
+    try {
+      const r = P.catalog.parse(await invoke("catalog_page", { url: P.catalog.searchUrl({ q: find.q, composer: find.composer, start }) }));
+      find.pieces = r.pieces; find.next = r.next;
+    } catch (e) {
+      find.error = t("Couldn't reach the Mutopia Project: {why}", { why: String(e && e.message || e) });
+    }
+    find.busy = false;
+    if (libView === "find") renderLibrary();
+  }
+  async function findSave(p, target) {
+    if (!target || find.saving.has(p.mid)) return;
+    find.saving.add(p.mid); renderLibrary();
+    const n = P.catalog.names(p);
+    try {
+      const bytes = async (url) => new Uint8Array(await invoke("catalog_file", { url }));
+      await library.write(target.id, n.mid, await bytes(p.mid));
+      if (n.pdf) await library.write(target.id, n.pdf, await bytes(p.pdf));
+      await library.write(target.id, n.lesson, P.catalog.lesson(p));
+      toast(t("Saved {name} in {folder}", { name: p.title, folder: target.title }));
+    } catch (e) {
+      toast(t("Couldn't download it: {why}", { why: String(e && e.message || e) }));
+    }
+    find.saving.delete(p.mid);
+    if (libView === "find") renderLibrary();
+  }
+
   function progressView() {
     const all = progress.all().pieces;
     const keys = Object.keys(all).filter((k) => all[k].seconds || all[k].runs).sort((a, b) => (all[b].lastDay || "").localeCompare(all[a].lastDay || ""));
@@ -1193,7 +1301,7 @@
   function aboutPage() {
     const credits = [
       ["abcjs", t("draws ABC music")], ["OpenSheetMusicDisplay", t("draws MusicXML")], ["markdown-it", t("reads lessons")],
-      ["pdf.js", t("shows PDF books")], ["Salamander Grand Piano", t("the piano sound, by Alexander Holm, CC-BY 3.0")], ["Lucide", t("icons")],
+      ["pdf.js", t("shows PDF books")], ["Salamander Grand Piano", t("the piano sound, by Alexander Holm, CC-BY 3.0")], ["Lucide", t("icons")], ["Mutopia Project", t("free sheet music in Find music, each piece under its own licence")],
     ];
     const list = el("div", "set-card");
     for (const [name, what] of credits) { const r = el("div", "set-row"); r.append(el("strong", null, name), el("span", "dim", what)); list.appendChild(r); }

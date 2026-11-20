@@ -44,8 +44,10 @@ src/roll.js          falling notes and the keyboard, one canvas
 src/timeline.js      the bars strip: seek, drag a loop
 src/layout.js        the panel split tree: normalise, place, resize, render
 src-tauri/src/portable.rs  where the data lives (beside the exe by default) and the in-place updater
+src-tauri/src/catalog.rs   fetches Mutopia's pages and files for Find music: that host only
 src/menus.js         the menu bar: menus built on open, Alt+letter, arrows, Esc
 src/library.js       courses: built-in, folders (File System Access), single files
+src/catalog.js       Find music: Mutopia's search URL, its result pages read into pieces, the lesson saved with a download (pure)
 src/practice.js      one practice session: engine + score + roll + sound; transpose, auto speed-up, free play
 src/progress.js      time per day, runs, best tempo and weak bars (pure, over a store)
 src/hotkeys.js       rebindable shortcuts, computer keys and piano keys (pure)
@@ -97,6 +99,13 @@ here: fix them in keel, release it, then `node tools/keel-sync.js v<x.y.z>`.
   read the progress and settings in `Data\EBWebView`. Settings → About can
   move it to AppData or another folder; the move copies and leaves the old
   copy, so nothing is lost if it fails half-way.
+- **Find music reaches the Mutopia Project.** The page can't fetch other
+  sites (CSP, and Mutopia sends no CORS headers), so `catalog.rs` fetches
+  for it: https only, `www.mutopiaproject.org` only, its `/cgibin/`,
+  `/ftp/` and `/advsearch.html` paths only, no redirects, 25 MB at most.
+  What you search for is sent to Mutopia. Downloads keep each piece's
+  licence and source in the lesson saved beside them; the app ships none
+  of their files.
 - **English only.** keel's i18n is loaded but there is no second language.
 - **Progress lives in this computer's storage** (localStorage
   `piano.progress`), not in the lesson folders: built-in lessons have no

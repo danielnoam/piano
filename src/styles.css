@@ -586,3 +586,8 @@ input.switch { width: 15px; height: 15px; margin: 0; accent-color: var(--accent)
   .set-row { flex-wrap: wrap; }
   .set-control select { min-width: 0; }
 }
+.find-box { width: 240px; }
+.find-error { color: var(--bad); }
+.find-head { margin: 0; font-size: 13px; color: var(--text-dim); font-weight: 500; }
+table.files.find-table td:last-child { width: 112px; max-width: none; overflow: visible; padding-block: 2px; }
+.find-pages { padding: var(--space-3) var(--space-5); }

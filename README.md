@@ -77,6 +77,9 @@ watches it and reloads a lesson when you save it in your editor.
 - Three built-in courses: Getting started, A first year (26 lessons on
   reading, rhythm, scales and chords) and Songs (eight public-domain
   pieces in easy two-hand arrangements).
+- Find music: search the Mutopia Project's free piano music by title or
+  composer and download a piece into one of your folders: its MIDI file,
+  its sheet music as a PDF beside it, and its licence (Windows app).
 - Recital: play the whole piece without stopping for points, a combo for
   notes in a row and up to five stars; the best stars show in the library.
 - Watch and listen: the app plays the piece while you follow it.
